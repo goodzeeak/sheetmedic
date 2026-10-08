@@ -15,6 +15,7 @@ export function parseFile(buffer:ArrayBuffer,name:string):Dataset {
     if(raw.length>LIMITS.rows+2 || raw.some(r=>r.length>LIMITS.columns)) throw new Error('Limit: 20,000 data rows and 100 columns per sheet.');
     if(/\r?\n$/.test(text) && raw.at(-1)?.length===1 && raw.at(-1)?.[0]==='') raw.pop();
     const width=Math.max(...raw.map(r=>r.length));
+    if(raw.length*width>LIMITS.cells) throw new Error('Limit: 300,000 cells per file.');
     const warnings=raw.some(r=>r.length!==raw[0].length)?['Uneven row widths were padded with blank cells. Review the inferred columns.']:[];
     const rows=raw.map(r=>Array.from({length:width},(_,i)=>r[i]??null));
     const sheets=[{name:'Sheet 1',rows}]; validateSheets(sheets);
@@ -31,13 +32,18 @@ export function parseFile(buffer:ArrayBuffer,name:string):Dataset {
     if(!names.includes('[Content_Types].xml') || !names.includes('xl/workbook.xml')) throw new Error('Not an XLSX workbook.');
     if(names.some(n=>/vbaProject|externalLinks/i.test(n))) throw new Error('Workbooks with macros or external links are unsupported.');
     const wb=XLSX.read(buffer,{type:'array',cellFormula:true,cellDates:false,sheetRows:LIMITS.rows+2});
-    let formula=false;
+    let formula=false,allocatedCells=0;
     const sheets=wb.SheetNames.map(name=> {
       const ws=wb.Sheets[name],ref=ws['!fullref']??ws['!ref'];
       if(!ref) return {name,rows:[]};
       const range=XLSX.utils.decode_range(ref);
       if(range.e.r>LIMITS.rows || range.e.c>=LIMITS.columns) throw new Error('Workbook exceeds row or column limits.');
-      for(const [address,cell] of Object.entries(ws)) if(!address.startsWith('!') && (cell.f || cell.F)) formula=true;
+      allocatedCells+=(range.e.r+1)*(range.e.c+1);
+      if(allocatedCells>LIMITS.cells) throw new Error('Limit: 300,000 cells per file.');
+      for(const [address,cell] of Object.entries(ws)) if(!address.startsWith('!')) {
+        if(cell.f || cell.F) formula=true;
+        if(cell.t==='e' && !cell.f) throw new Error('Workbook contains error cells. Resolve them in Excel before importing.');
+      }
       const rows=XLSX.utils.sheet_to_json<Cell[]>(ws,{header:1,defval:null,raw:true,blankrows:true,range:0});
       const width=Math.max(0,...rows.map(r=>r.length));
       return {name,rows:rows.map(r=>Array.from({length:width},(_,i)=>r[i]??null))};
