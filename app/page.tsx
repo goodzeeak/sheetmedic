@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChangeLog } from './change-log';
 import { Activity, ArrowDownToLine, ArrowRight, Check, ChevronRight, FileSpreadsheet, LockKeyhole, Moon, ShieldCheck, Sparkles, Sun, Upload, X, RotateCcw, CircleAlert } from 'lucide-react';
-import { Analytics } from '@vercel/analytics/next';
+
 import { analyze, Dataset, Fixes, LIMITS, noFixes, repair, Sheet } from '../lib/engine';
-import { event } from '../lib/analytics';
+import { event, type AnalyticsEvent } from '../lib/analytics';
 type Report=ReturnType<typeof analyze>;
 type Preview=ReturnType<typeof repair>&{report:Report};
 type Parsed={source:Dataset;reports:Report[]};
@@ -15,6 +15,8 @@ export default function Home(){
   const [parsed,setParsed]=useState<Parsed|null>(null),[filename,setFilename]=useState(''),[index,setIndex]=useState(0),[fixes,setFixes]=useState<Fixes>(noFixes),[preview,setPreview]=useState<Preview|null>(null),[ack,setAck]=useState(false),[message,setMessage]=useState('');
   const worker=useRef<Worker|null>(null),input=useRef<HTMLInputElement>(null),sequence=useRef(0),pending=useRef(new Map<number,{resolve:(v:unknown)=>void;reject:(e:Error)=>void;timer:ReturnType<typeof setTimeout>}>());
   const resultHeading=useRef<HTMLHeadingElement>(null);
+  const trackFile=useRef(true);
+  const workflowEvent=(name:AnalyticsEvent)=>{if(trackFile.current)event(name);};
   const startWorker=()=>{
     worker.current?.terminate();
     const w=new Worker(new URL('../lib/worker.ts',import.meta.url));
@@ -28,17 +30,17 @@ export default function Home(){
     const id=++sequence.current;
     return new Promise<T>((resolve,reject)=>{const timer=setTimeout(()=>{worker.current?.terminate();worker.current=null;for(const p of pending.current.values()){clearTimeout(p.timer);p.reject(new Error('Processing exceeded 20 seconds. Try a smaller file.'));}pending.current.clear();},20000);pending.current.set(id,{resolve:v=>resolve(v as T),reject,timer});worker.current!.postMessage({...data,id});});
   }
-  async function load(file:File){
-    if(busy)return;setError('');setMessage('');event('processing_attempt');
-    if(file.size>LIMITS.bytes){setError('Please choose a file smaller than 5 MB.');event('processing_failure');return;}
+  async function load(file:File,isSample=false){
+    if(busy)return;trackFile.current=!isSample;setError('');setMessage('');workflowEvent('processing_attempt');
+    if(file.size>LIMITS.bytes){setError('Please choose a file smaller than 5 MB.');workflowEvent('processing_failure');return;}
     setBusy(true);setParsed(null);setPreview(null);setFixes(noFixes());setAck(false);setIndex(0);
-    try{startWorker();const buffer=await file.arrayBuffer();const result=await request<Parsed>({type:'parse',name:file.name,buffer});setParsed(result);setFilename(file.name);event('analysis_success');event('issues_detected',result.reports.reduce((n,r)=>n+r.issues.reduce((a,i)=>a+i.count,0),0));setTimeout(()=>resultHeading.current?.focus(),0);}
-    catch(e){setError(e instanceof Error?e.message:'Unable to read file.');event('processing_failure');}finally{setBusy(false);}
+    try{startWorker();const buffer=await file.arrayBuffer();const result=await request<Parsed>({type:'parse',name:file.name,buffer});setParsed(result);setFilename(file.name);workflowEvent('analysis_success');setTimeout(()=>resultHeading.current?.focus(),0);}
+    catch(e){setError(e instanceof Error?e.message:'Unable to read file.');workflowEvent('processing_failure');}finally{setBusy(false);}
   }
   function update(next:Fixes){setFixes(next);setPreview(null);setMessage('');}
-  async function makePreview(){setBusy(true);setError('');try{setPreview(await request<Preview>({type:'preview',index,fixes}));event('repairs_applied');}catch(e){setError((e as Error).message);event('processing_failure');}finally{setBusy(false);}}
+  async function makePreview(){setBusy(true);setError('');try{const nextPreview=await request<Preview>({type:'preview',index,fixes});setPreview(nextPreview);if(nextPreview.changed>0||nextPreview.removed>0)workflowEvent('repairs_applied');}catch(e){setError((e as Error).message);workflowEvent('processing_failure');}finally{setBusy(false);}}
   async function download(format:'csv'|'xlsx'){
-    setBusy(true);setError('');try{const bytes=await request<Uint8Array>({type:'export',index,fixes,format});const url=URL.createObjectURL(new Blob([new Uint8Array(bytes)],{type:format==='csv'?'text/csv;charset=utf-8':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=document.createElement('a');a.href=url;a.download=filename.replace(/\.[^.]+$/,'')+'-cleaned.'+format;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);setMessage('Your cleaned file is ready. The original is unchanged.');event('export_success');}catch(e){setError((e as Error).message);event('processing_failure');}finally{setBusy(false);}
+    setBusy(true);setError('');try{const bytes=await request<Uint8Array>({type:'export',index,fixes,format});const url=URL.createObjectURL(new Blob([new Uint8Array(bytes)],{type:format==='csv'?'text/csv;charset=utf-8':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=document.createElement('a');a.href=url;a.download=filename.replace(/\.[^.]+$/,'')+'-cleaned.'+format;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);setMessage('Your cleaned file is ready. The original is unchanged.');workflowEvent('export_success');}catch(e){setError((e as Error).message);workflowEvent('processing_failure');}finally{setBusy(false);}
   }
   function reset(){worker.current?.terminate();worker.current=null;setParsed(null);setPreview(null);setFixes(noFixes());setError('');setMessage('');setFilename('');setAck(false);}
   const report=parsed?.reports[index],sheet=parsed?.source.sheets[index],locked=parsed?.source.formula;
@@ -49,7 +51,7 @@ export default function Home(){
         <section className="hero"><div className="eyebrow"><span className="live-dot"/> SMALL TOOL. CLEANER DATA.</div><h1>A clean sheet<br/>starts <span>here.</span><svg viewBox="0 0 145 13" aria-hidden="true"><path d="M3 9Q67 0 140 6"/></svg></h1><p>Messy spreadsheet? Let’s sort it out.<br/>Find the issues, choose your fixes, and get back to work.</p><div className="hero-chips"><span><Check size={14}/> No signup</span><span><Check size={14}/> Free to use</span><span><LockKeyhole size={13}/> Files stay on your device</span></div></section>
         <section className={'upload-card '+(drag?'dragging':'')} aria-label="Upload spreadsheet" onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);if(e.dataTransfer.files.length>1)setError('Choose one file at a time.');else if(e.dataTransfer.files[0])void load(e.dataTransfer.files[0]);}}>
           <div className="file-art"><div className="ghost-file"/><div className="main-file"><FileSpreadsheet size={35}/><span>.csv / .xlsx</span></div><span className="art-check"><Check size={16}/></span></div><h2>{busy?'Checking your spreadsheet…':'Drop your spreadsheet here'}</h2><p>or choose a file from your device</p><button className="primary" disabled={busy} onClick={()=>input.current?.click()}><Upload size={16}/>{busy?'Analyzing…':'Choose a file'}<ArrowRight size={16}/></button><input ref={input} className="sr-only" type="file" accept=".csv,.xlsx" aria-label="Choose spreadsheet" onChange={e=>{if(e.target.files?.[0])void load(e.target.files[0]);e.target.value='';}}/><div className="upload-limit">CSV or XLSX <span>·</span> Up to 5 MB <span>·</span> 20,000 rows per sheet</div><div className="local-note"><ShieldCheck size={15}/> Processed in your browser. Never uploaded.</div>
-        </section><div className="sample-row">Just looking around? <button disabled={busy} onClick={()=>void load(new File([demo],'sample-customers.csv',{type:'text/csv'}))}>Try a sample spreadsheet <ArrowRight size={14}/></button></div>
+        </section><div className="sample-row">Just looking around? <button disabled={busy} onClick={()=>void load(new File([demo],'sample-customers.csv',{type:'text/csv'}),true)}>Try a sample spreadsheet <ArrowRight size={14}/></button></div>
       </>:<section className="workspace" aria-label="Spreadsheet workspace"><div className="workspace-title"><div><div className="eyebrow">YOUR SPREADSHEET, UNDER THE MICROSCOPE</div><h1 ref={resultHeading} tabIndex={-1}>A little clarity for your data.</h1><p className="file-name"><FileSpreadsheet size={16}/>{filename}</p></div><button className="secondary" onClick={reset} disabled={busy}><X size={15}/> Start over</button></div>
         <div className="sheet-bar"><label htmlFor="sheet">Worksheet</label><select id="sheet" value={index} disabled={busy} onChange={e=>{setIndex(Number(e.target.value));setFixes(noFixes());setPreview(null);setAck(false);setMessage('');}}>{parsed.source.sheets.map((s,i)=><option key={i} value={i}>{s.name}</option>)}</select><span>Repairs apply to the selected sheet.</span></div>
         {parsed.source.warnings.map((w,i)=><div className="notice" key={i}><CircleAlert size={17}/><span>{w}</span></div>)}
@@ -65,7 +67,7 @@ export default function Home(){
       <section className="how" id="how-it-works"><div className="section-kicker">LESS CLEANUP. MORE CLARITY.</div><h2>From messy to ready in three steps.</h2><div className="steps"><article><span className="step-number">01</span><h3>Get the full picture.</h3><p>Spot duplicate rows, missing values, extra spaces and patterns worth a second look.</p></article><article><span className="step-number">02</span><h3>Make the right changes.</h3><p>Pick your fixes and preview the result. Ambiguous data stays in your hands.</p></article><article><span className="step-number">03</span><h3>Take a clean copy.</h3><p>Download a fresh CSV or data-only Excel file. Your original is always untouched.</p></article></div></section>
       <section className="privacy-strip"><span className="shield-icon"><ShieldCheck size={26}/></span><div><h3>Your spreadsheet is your business.</h3><p>No uploads. No cloud storage. Your file is processed right here, in your browser.</p></div><Link href="/privacy/">Our privacy promise <ArrowRight size={15}/></Link></section>
       <section className="faq"><h2>A few things worth knowing.</h2><details><summary>What can SheetMedic find?</summary><p>Exact duplicate rows, whitespace, empty rows and columns, capitalization differences, numeric strings, inconsistent date formats, missing values, outliers, duplicate headings and category variants. Possible issues are clearly separated from definite patterns.</p></details><details><summary>Will it preserve my Excel workbook?</summary><p>XLSX exports retain data and sheet names, not formatting, charts or metadata. Formula-bearing workbooks can be inspected but not repaired or exported. Keep your original for anything beyond plain tabular data.</p></details><details><summary>Does it guess what my data should be?</summary><p>No. Every fix is optional. Missing values are never filled, ambiguous dates are left alone, and leading-zero identifiers remain text. The first row is treated as headings.</p></details></section>
-    </main><footer><Link href="/" className="brand"><Activity size={19}/> SheetMedic</Link><span>A little tool by <strong>Goodwin Labs</strong>.</span><Link href="/privacy/">Privacy & limitations <ArrowRight size={13}/></Link></footer>{process.env.NEXT_PUBLIC_ANALYTICS_ENABLED==='true'&&<Analytics/>}
+    </main><footer><Link href="/" className="brand"><Activity size={19}/> SheetMedic</Link><span>A little tool by <strong>Goodwin Labs</strong>.</span><Link href="/privacy/">Privacy & limitations <ArrowRight size={13}/></Link></footer>
   </div>;
 }
 function Table({sheet,title}:{sheet:Sheet;title:string}){return <div><h3>{title}</h3><div className="table-scroll"><table><thead><tr>{sheet.rows[0]?.map((v,c)=><th key={c} scope="col">{String(v??'')||`Column ${c+1}`}</th>)}</tr></thead><tbody>{sheet.rows.slice(1,9).map((r,i)=><tr key={i}>{r.map((v,c)=><td key={c}>{v===null||v===''?<span className="empty-cell">empty</span>:String(v)}</td>)}</tr>)}</tbody></table></div></div>;}

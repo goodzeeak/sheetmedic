@@ -11,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-Open http://localhost:3000. No API keys, database or account required. Copy `.env.example` to `.env.local` only to change the canonical origin or enable optional analytics.
+Open http://localhost:3000. No API keys, database or account required. Copy `.env.example` to `.env.local` only to change the canonical origin .
 
 ## Architecture
 
@@ -20,7 +20,7 @@ Open http://localhost:3000. No API keys, database or account required. Copy `.en
 - `lib/files.ts`: Papa Parse CSV, official SheetJS CE 0.20.3 XLSX, fflate ZIP preflight.
 - `lib/worker.ts`: parsing, analysis, repair and export off the UI thread; 20-second timeout terminates the worker.
 - `app/page.tsx`: upload, report, repair selection, preview, all-change pagination and downloads.
-- No spreadsheet network requests, API routes, persistent storage, remote fonts or third-party assets.
+- No spreadsheet network requests, API routes, persistent storage, remote fonts or third-party assets. Anonymous usage events go to Umami; see ANALYTICS.md.
 
 ## Package selection
 
@@ -66,11 +66,11 @@ Import this directory into a Git repository connected to Vercel. `vercel.json` s
 
 ### Sites
 
-`.openai/hosting.json` binds this source to the existing private SheetMedic Site and serves `out`. Sites deployment is handled by its source/version publishing workflow. Do not create another Site for subsequent edits. The initial Site is owner-private; hosting sign-in may be required, so it is a review deployment rather than a public no-signup launch. Vercel-specific headers must be configured separately on any other host.
+`.openai/hosting.json` binds this source to the existing private SheetMedic Site and serves `out`. Sites deployment is handled by its source/version publishing workflow. Do not create another Site for subsequent edits. The Site currently has public access; updates preserve that audience. Vercel-specific headers must be configured separately on any other host.
 
 ## Analytics
 
-Vercel Web Analytics integration is present but **disabled by default**, including the private Sites deployment. On Vercel, enable Web Analytics in the project and set `NEXT_PUBLIC_ANALYTICS_ENABLED=true` before building. Plan limits and account configuration are the owner's responsibility. Page visits and fixed events are supported: processing_attempt, analysis_success, issues_detected (aggregate count), repairs_applied, export_success, processing_failure. Never attach filenames, cell values, column names, raw errors, or arbitrary properties. The event wrapper swallows tracking errors. The privacy page describes optional analytics and host request logging.
+Umami Cloud Hobby analytics is configured for the public Sites deployment. It uses fixed privacy-filtered events without an SDK, database or third-party script. Open [Umami Cloud](https://cloud.umami.is/), select SheetMedic, view Visitors in the overview and completed analyses/exports in Events. See [ANALYTICS.md](ANALYTICS.md) for exact metrics, dashboard instructions, privacy boundaries, free limits, tests and disabling instructions.
 
 ## Known limitations and security review
 
@@ -80,7 +80,7 @@ Vercel Web Analytics integration is present but **disabled by default**, includi
 - ZIP preflight and timeout reduce denial-of-service exposure but browser memory is not a hard sandbox budget. A malicious parser input may crash a tab. No claim of comprehensive hostile-file resilience is made.
 - All-change inspection is paginated; side-by-side tables show only the first eight rows. Preview counts refer to selected repairs, while issue counts may refer to rows, cells or columns as labelled.
 - No durable audit trail, session persistence or server-side recovery. Reset or close the tab to clear data.
-- The Sites preview remains private and optional analytics remains off until public hosting is configured.
+- The Sites deployment is public. Usage analytics is configured for the current hostname; update analytics-config.json if it changes.
 
 ## Short roadmap
 
