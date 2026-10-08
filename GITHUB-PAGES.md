@@ -9,14 +9,14 @@ The application uses Next.js static export (`output: 'export'`) with trailing sl
 
 Push to `main`, or run **Actions → Deploy SheetMedic to GitHub Pages → Run workflow**. The workflow reads the Pages origin/subpath from `actions/configure-pages`, installs locked dependencies, runs lint/type checks/unit tests, builds, runs all browser tests against a strict static server, uploads `out`, and deploys using the `github-pages` environment. It uses GitHub's automatic token with read-only source access and narrowly scoped Pages deployment permissions. No personal access token is saved in the repository.
 
-Repository settings: Pages source **GitHub Actions**. Repository variable `GA4_MEASUREMENT_ID` is `G-G3J46L2VNH`; it is public, not a secret. No custom domain is configured. Build values are `NEXT_PUBLIC_BASE_PATH=/sheetmedic` and `NEXT_PUBLIC_SITE_URL=https://goodzeeak.github.io/sheetmedic`, discovered automatically by the workflow. The GA configuration file is generated in `out`; changing runtime environment variables after export has no effect.
+Repository settings: Pages source **GitHub Actions**. Repository variable `GA4_MEASUREMENT_ID` is `G-L558G8699Z`; it is public, not a secret. No custom domain is configured. Build values are `NEXT_PUBLIC_BASE_PATH=/sheetmedic` and `NEXT_PUBLIC_SITE_URL=https://goodzeeak.github.io/sheetmedic`, discovered automatically by the workflow. The GA configuration file is generated in `out`; changing runtime environment variables after export has no effect.
 
 ## Local validation
 
 ```powershell
 $env:NEXT_PUBLIC_BASE_PATH='/sheetmedic'
 $env:NEXT_PUBLIC_SITE_URL='https://goodzeeak.github.io/sheetmedic'
-$env:NEXT_PUBLIC_GA4_MEASUREMENT_ID='G-G3J46L2VNH'
+$env:NEXT_PUBLIC_GA4_MEASUREMENT_ID='G-L558G8699Z'
 npm ci
 npm run lint
 npm run typecheck
@@ -34,7 +34,7 @@ For a root-hosted export, set base path to an empty string and site URL to that 
 
 ## GA4 and privacy
 
-Google tag ID: **G-G3J46L2VNH**. Umami is absent from the migrated application. The old preview has its previous independent analytics deployment; visiting it does not run this Pages build.
+Google tag ID: **G-L558G8699Z**. Umami is absent from the migrated application. The old preview has its previous independent analytics deployment; visiting it does not run this Pages build.
 
 Visitors explicitly opt in before any Google script or collection request starts. DNT/GPC disable analytics. The preference is the only analytics value saved in localStorage. Denial and withdrawal leave spreadsheet functionality fully available.
 
@@ -58,7 +58,7 @@ Demo-file actions are excluded. Events before consent are not replayed. Each act
 
 ## Dashboard and verification
 
-Sign in to https://analytics.google.com/ . The supplied SheetMedic stream is under the **Goodwin Labs → FilamentCalc** property (property 558025259), with stream ID **16064630790**. The property name is shared with another product; filter by Stream name **SheetMedic** or canonical `/sheetmedic/` URLs to separate traffic. Changing the property name or creating a new property is outside this migration.
+Sign in to https://analytics.google.com/ and select the property containing measurement ID **G-L558G8699Z** (Admin → Data streams → select the web stream to confirm). The previous property/stream references applied to the replaced measurement ID and should no longer be used.
 
 Use **Reports → Realtime** to verify a consented visit and `analysis_success`, `repairs_applied`, `export_success`. Standard processed reports may lag. Test traffic from deployment verification is synthetic and should not be counted as customer demand. Analytics tests stub Google locally; the live smoke test uses synthetic files and verifies collection responses. Realtime visibility is a separate check from HTTP receipt.
 
