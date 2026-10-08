@@ -1,0 +1,27 @@
+import {describe,it,expect} from 'vitest';
+import * as XLSX from 'xlsx';
+import {zipSync,strToU8} from 'fflate';
+import {analyze,repair,noFixes,numeric,dateISO,Sheet,LIMITS,validateSheets} from '../lib/engine';
+import {parseFile,exportCSV,exportXLSX} from '../lib/files';
+const buffer=(s:string)=>new TextEncoder().encode(s).buffer;
+const sheet=(rows:Sheet['rows']):Sheet=>({name:'Customers',rows});
+describe('analysis and deterministic repair',()=>{
+ it('distinguishes duplicate typed values and removes only exact original rows',()=>{const s=sheet([['Name','Qty'],[' A ','2'],[' A ','2'],['A',2]]);const before=structuredClone(s);const f={...noFixes(),duplicates:true,trim:true,numbers:true};const r=repair(s,f);expect(r.removed).toBe(1);expect(r.sheet.rows).toEqual([['Name','Qty'],['A',2],['A',2]]);expect(s).toEqual(before);expect(repair(s,noFixes()).sheet).toEqual(s);expect(repair(s,f)).toEqual(r);});
+ it('finds every required issue type',()=>{const rows:Sheet['rows']=[['Name','Name','Amount','Date','Empty'],...Array.from({length:10},(_,i)=>[i%2?'active':'ACTIVE',i===0?' a ':i===1?'':String(i),i===9?'999':'1'+i,i%2?'2026/01/02':'02/03/2026',null])];rows.push([...rows[1]],[null,null,null,null,null]);const kinds=analyze(sheet(rows)).issues.map(i=>i.kind);expect(kinds).toEqual(expect.arrayContaining(['duplicate','whitespace','emptyRow','emptyColumn','capitalization','numeric','dates','missing','outlier','heading','category']));});
+ it('protects identifiers, precision and mixed text',()=>{for(const v of ['0012','012.3','+61400123456','1e10','1234567890123456','-0','1,234','SKU-22']) expect(numeric(v,'Amount')).toBeNull();for(const h of ['Customer ID','SKU','Phone','Postal code','Account'])expect(numeric('123',h)).toBeNull();expect(numeric('12.50','Amount')).toBe(12.5);expect(numeric('hello','Amount')).toBeNull();});
+ it('only accepts valid unambiguous year-first dates',()=>{expect(dateISO('2024/02/29')).toBe('2024-02-29');for(const v of ['03/04/2026','13/04/2026','2025/02/29','2026/13/01','2026-02/01'])expect(dateISO(v)).toBeNull();});
+ it('never fills missing values and removes empty rows on request',()=>{const s=sheet([['A','B'],['x',null],[' ',null]]);expect(repair(s,{...noFixes(),emptyRows:true}).sheet.rows).toEqual([['A','B'],['x',null]]);});
+ it('normalizes chosen columns with deterministic category ties',()=>{const s=sheet([['Status','ID'],['Active','001'],['active','002'],['ACTIVE','003']]);const r=repair(s,{...noFixes(),categories:[0]});expect(r.sheet.rows.slice(1).map(r=>r[0])).toEqual(['ACTIVE','ACTIVE','ACTIVE']);expect(r.sheet.rows[1][1]).toBe('001');});
+ it('does not claim a score for empty data',()=>{expect(analyze(sheet([['A']])).score).toBeNull();expect(analyze(sheet([['A'],['x']])).score).toBe(100);});
+ it('handles bounded large data and rejects excess',()=>{const s=sheet([['A'],...Array.from({length:20000},(_,i)=>[i])]);expect(analyze(s).records).toBe(20000);expect(()=>validateSheets([sheet([...s.rows,[1]])])).toThrow();expect(()=>validateSheets([sheet([Array(101).fill('x')])])).toThrow();});
+});
+describe('safe file IO',()=>{
+ it('rejects empty, binary and malformed CSV',()=>{for(const s of ['', '  ', '\0garbage','A,B\n"unterminated,x'])expect(()=>parseFile(buffer(s),'bad.csv')).toThrow();});
+ it('reads quoted commas, multiline fields, Unicode and uneven CSV',()=>{const d=parseFile(buffer('Name,Note\n"Zoë, 李","hello\nworld"\nSam'),'test.csv');expect(d.sheets[0].rows[1]).toEqual(['Zoë, 李','hello\nworld']);expect(d.warnings).toHaveLength(1);});
+ it('exports escaped CSV formulas including whitespace prefixes',()=>{const s=sheet([['=HEADER','A'],['=1+1',' \t@SUM(1)'],['-2',-2],['Zoë, 李','a"b\nc']]);const out=new TextDecoder().decode(exportCSV(s));expect(out).toContain("'=HEADER");expect(out).toContain("'=1+1");expect(out).toContain("' \t@SUM");expect(parseFile(buffer(out),'clean.csv').sheets[0].rows[3]).toEqual(['Zoë, 李','a"b\nc']);});
+ it('round-trips multiple sheets, Unicode and text cell types',()=>{const sheets=[sheet([['Name','ID'],['李','00123']]),{name:'Other',rows:[['Number'],[42]]}];const bytes=exportXLSX(sheets);const parsed=parseFile(bytes.buffer as ArrayBuffer,'sample.xlsx');expect(parsed.sheets).toEqual(sheets);expect(parsed.formula).toBe(false);});
+ it('detects formulas without executing them or modifying original bytes',()=>{const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,{A1:{t:'s',v:'Formula'},A2:{t:'n',v:2,f:'1+1'},'!ref':'A1:A2'},'Formula');const bytes=XLSX.write(wb,{type:'array',bookType:'xlsx'});const copy=new Uint8Array(bytes).slice();expect(parseFile(bytes,'formula.xlsx').formula).toBe(true);expect(new Uint8Array(bytes)).toEqual(copy);});
+ it('rejects malformed or disguised workbooks',()=>{for(const b of [buffer('not a zip'),zipSync({'a.txt':strToU8('x')}).buffer])expect(()=>parseFile(b as ArrayBuffer,'bad.xlsx')).toThrow();});
+ it('enforces upload limits',()=>{expect(()=>parseFile(new ArrayBuffer(LIMITS.bytes+1),'large.csv')).toThrow(/5 MB/);});
+ it('rejects ZIP expansion and external links',()=>{const bomb=zipSync({'large':new Uint8Array(LIMITS.expanded+1)});expect(()=>parseFile(bomb.buffer as ArrayBuffer,'bomb.xlsx')).toThrow(/25 MB/);const links=zipSync({'[Content_Types].xml':strToU8(''),'xl/workbook.xml':strToU8(''),'xl/externalLinks/x.xml':strToU8('')});expect(()=>parseFile(links.buffer as ArrayBuffer,'links.xlsx')).toThrow(/external links/);});
+});

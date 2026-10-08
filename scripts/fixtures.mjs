@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+import * as XLSX from 'xlsx';
+fs.mkdirSync('tests/fixtures',{recursive:true});
+fs.writeFileSync('tests/fixtures/customers.csv','Name,Customer ID,Amount,Date,Status\r\n Zoë 李 ,0012,120,2026/01/12,Active\r\n Zoë 李 ,0012,120,2026/01/12,Active\r\nSam,0013,85,03/04/2026,active\r\n,,,,\r\n');
+fs.writeFileSync('tests/fixtures/malformed.csv','Name,Note\nSam,"unclosed');
+fs.writeFileSync('tests/fixtures/empty.csv','');
+const wb=XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Name','ID'],[' Zoë ','0012'],[' Zoë ','0012']]),'Customers');
+XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Region','Count'],['Sydney',12],['東京',3]]),'Regions');
+fs.writeFileSync('tests/fixtures/multi-sheet.xlsx',XLSX.write(wb,{type:'buffer',bookType:'xlsx'}));
+const formulas=XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(formulas,{A1:{t:'s',v:'Total'},A2:{t:'n',v:2,f:'1+1'},'!ref':'A1:A2'},'Formulas');
+fs.writeFileSync('tests/fixtures/formulas.xlsx',XLSX.write(formulas,{type:'buffer',bookType:'xlsx'}));
