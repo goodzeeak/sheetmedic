@@ -1,2 +1,3 @@
 import {defineConfig} from '@playwright/test';
-export default defineConfig({testDir:'./e2e',use:{baseURL:'http://127.0.0.1:3000',headless:true},webServer:{command:'npm run start',url:'http://127.0.0.1:3000',reuseExistingServer:!process.env.CI},projects:[{name:'chromium',use:{browserName:'chromium'}}]});
+const base='http://127.0.0.1:3000'+(process.env.NEXT_PUBLIC_BASE_PATH||'');
+export default defineConfig({testDir:'./e2e',use:{baseURL:base+'/',headless:true},webServer:{command:'node scripts/serve-static.mjs',url:base+'/',reuseExistingServer:false},projects:[{name:'chromium',use:{browserName:'chromium'}}]});

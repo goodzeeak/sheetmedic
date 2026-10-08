@@ -1,16 +1,16 @@
+import {assetPath,pagePath} from './site';
 /** Fixed events only: never accept file data, names, errors or arbitrary properties. */
 export const EVENTS = ['processing_attempt', 'analysis_success', 'repairs_applied', 'export_success', 'processing_failure'] as const;
 export type AnalyticsEvent = typeof EVENTS[number];
 export type AnalyticsPage = '/' | '/privacy/';
-export const ANALYTICS_ENDPOINT = 'https://gateway.umami.is/api/send';
-export type AnalyticsConfig = { websiteId: string; hostname: string };
+export type AnalyticsConfig = { measurementId: string; siteUrl: string };
 type PrivacyNavigator = { doNotTrack?: string | null; globalPrivacyControl?: boolean };
 
 export function validConfig(value: unknown): value is AnalyticsConfig {
   if (!value || typeof value !== 'object') return false;
   const config = value as AnalyticsConfig;
-  return typeof config.websiteId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(config.websiteId)
-    && typeof config.hostname === 'string' && /^(?:[a-z0-9-]+\.)+[a-z0-9-]+$/i.test(config.hostname);
+  if(typeof config.measurementId!=='string'||!/^G-[A-Z0-9]{4,20}$/.test(config.measurementId)||typeof config.siteUrl!=='string')return false;
+  try {const url=new URL(config.siteUrl);return ['https:','http:'].includes(url.protocol)&&!url.search&&!url.hash&&!url.username&&!url.password;}catch{return false;}
 }
 
 export function privacyOptOut(nav: PrivacyNavigator) {
@@ -19,39 +19,34 @@ export function privacyOptOut(nav: PrivacyNavigator) {
 
 export function payloadFor(config: AnalyticsConfig, page: AnalyticsPage, name?: AnalyticsEvent) {
   if (!validConfig(config) || !['/', '/privacy/'].includes(page) || (name !== undefined && !EVENTS.includes(name))) return null;
-  return { type: 'event', payload: {
-    website: config.websiteId, hostname: config.hostname, url: page,
-    // Never inspect document.title, location.search/hash, document.referrer or the DOM.
-    title: page === '/' ? 'SheetMedic' : 'SheetMedic privacy', referrer: '',
-    ...(name === undefined ? {} : { name }),
-  } };
+  return {name:name??'page_view',params:{page_location:config.siteUrl.replace(/\/$/,'')+page,page_title:page==='/'?'SheetMedic':'SheetMedic privacy',page_referrer:''}};
 }
 
-let configuration: Promise<AnalyticsConfig | null> | undefined;
-function getConfig(): Promise<AnalyticsConfig | null> {
-  if (typeof window === 'undefined' || privacyOptOut(navigator)) return Promise.resolve(null);
-  configuration ??= fetch('/analytics-config.json', { credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(3000) })
-    .then(response => response.ok ? response.json() : null)
-    .then(value => validConfig(value) && value.hostname === window.location.hostname ? value : null)
-    .catch(() => null);
-  return configuration;
+export const CONSENT_KEY='sheetmedic.analytics-consent';
+let frame:HTMLIFrameElement|null=null,config:AnalyticsConfig|null=null,ready=false;
+let queue:NonNullable<ReturnType<typeof payloadFor>>[]=[];
+export function storedConsent(){try{return localStorage.getItem(CONSENT_KEY)==='granted';}catch{return false;}}
+export function setConsent(granted:boolean){
+  try{localStorage.setItem(CONSENT_KEY,granted?'granted':'denied');}catch{/* An in-memory choice still works. */}
+  if(!granted)stopAnalytics();
 }
-
-async function send(page: AnalyticsPage, name?: AnalyticsEvent) {
-  try {
-    const config = await getConfig();
-    if (!config || privacyOptOut(navigator)) return;
-    const body = payloadFor(config, page, name);
-    if (!body) return;
-    // No SDK, remote script, cookies, storage, visitor ID or extra properties.
-    // Networking exposes IP/User-Agent to the provider; neither is added to the payload.
-    await fetch(ANALYTICS_ENDPOINT, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-      credentials: 'omit', referrerPolicy: 'no-referrer', keepalive: true,
-      signal: AbortSignal.timeout(3000),
-    });
-  } catch { /* No retries, UI errors or processing dependencies on analytics. */ }
+function onReady(e:MessageEvent){
+  if(!frame||e.source!==frame.contentWindow||e.data?.type!=='sheetmedic-analytics-ready')return;
+  ready=true;frame.contentWindow?.postMessage({type:'initialize',config},'*');
+  for(const payload of queue)frame.contentWindow?.postMessage({type:'event',payload},'*');queue=[];
 }
-
-export function event(name: AnalyticsEvent) { if (EVENTS.includes(name)) void send('/', name); }
-export function pageVisit(path: string) { if (path === '/' || path === '/privacy/') void send(path); }
+export function startAnalytics(value:AnalyticsConfig){
+  if(frame||!validConfig(value)||privacyOptOut(navigator))return;
+  config=value;frame=document.createElement('iframe');frame.title='Optional usage analytics';frame.hidden=true;
+  // Opaque-origin sandbox: Google's tag cannot read the app DOM, uploaded files or cookies.
+  frame.setAttribute('sandbox','allow-scripts');frame.referrerPolicy='no-referrer';frame.src=assetPath('/ga-bridge.html');
+  window.addEventListener('message',onReady);document.body.appendChild(frame);
+}
+export function stopAnalytics(){frame?.remove();frame=null;config=null;ready=false;queue=[];if(typeof window!=='undefined')window.removeEventListener('message',onReady);}
+function send(page:AnalyticsPage,name?:AnalyticsEvent){
+  try{if(!config||!frame||privacyOptOut(navigator))return;const payload=payloadFor(config,page,name);if(!payload)return;
+    if(ready)frame.contentWindow?.postMessage({type:'event',payload},'*');else if(queue.length<20)queue.push(payload);
+  }catch{/* Analytics never blocks processing. */}
+}
+export function event(name:AnalyticsEvent){if(EVENTS.includes(name))send('/',name);}
+export function pageVisit(path:string){const page=pagePath(path);if(page==='/'||page==='/privacy/')send(page);}

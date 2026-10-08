@@ -20,7 +20,7 @@ Open http://localhost:3000. No API keys, database or account required. Copy `.en
 - `lib/files.ts`: Papa Parse CSV, official SheetJS CE 0.20.3 XLSX, fflate ZIP preflight.
 - `lib/worker.ts`: parsing, analysis, repair and export off the UI thread; 20-second timeout terminates the worker.
 - `app/page.tsx`: upload, report, repair selection, preview, all-change pagination and downloads.
-- No spreadsheet network requests, API routes, persistent storage, remote fonts or third-party assets. Anonymous usage events go to Umami; see ANALYTICS.md.
+- No spreadsheet network requests, API routes, persistent storage, remote fonts or third-party assets. Optional consented usage events go to GA4 in an isolated frame; see GITHUB-PAGES.md.
 
 ## Package selection
 
@@ -58,19 +58,9 @@ npm audit --omit=dev
 
 Fixtures are checked in under `tests/fixtures`; regenerate with `node scripts/fixtures.mjs`. Unit tests cover empty/malformed files, duplicate typed values, ambiguous dates, ID preservation, Unicode, CSV injection, workbook formulas, multi-sheet exports, large datasets, ZIP expansion, combined repairs and reversibility. Playwright tests the actual production export, downloads, failure recovery, mobile overflow, privacy navigation, themes, formula blocking and metadata-loss acknowledgement. Screenshots are written under ignored `test-results/`.
 
-## Deploy
+## Deploy and analytics
 
-### Vercel public launch
-
-Import this directory into a Git repository connected to Vercel. `vercel.json` sets Next.js, `npm run build`, static output `out`, and security headers. Set `NEXT_PUBLIC_SITE_URL` to the final public origin and rebuild; this drives canonical, Open Graph, sitemap and robots metadata. No server runtime is needed. A Vercel account/project is not provisioned by this repository.
-
-### Sites
-
-`.openai/hosting.json` binds this source to the existing private SheetMedic Site and serves `out`. Sites deployment is handled by its source/version publishing workflow. Do not create another Site for subsequent edits. The Site currently has public access; updates preserve that audience. Vercel-specific headers must be configured separately on any other host.
-
-## Analytics
-
-Umami Cloud Hobby analytics is configured for the public Sites deployment. It uses fixed privacy-filtered events without an SDK, database or third-party script. Open [Umami Cloud](https://cloud.umami.is/), select SheetMedic, view Visitors in the overview and completed analyses/exports in Events. See [ANALYTICS.md](ANALYTICS.md) for exact metrics, dashboard instructions, privacy boundaries, free limits, tests and disabling instructions.
+Production target: [SheetMedic on GitHub Pages](https://goodzeeak.github.io/sheetmedic/). Repository: [goodzeeak/sheetmedic](https://github.com/goodzeeak/sheetmedic). Pushes to main run all checks and publish through GitHub Actions. See [GITHUB-PAGES.md](GITHUB-PAGES.md) for configuration, subpath tests, GA4 event definitions, privacy controls, dashboard access and rollback. The original ChatGPT preview remains independent and online. Umami is removed from this build.
 
 ## Known limitations and security review
 
@@ -80,7 +70,7 @@ Umami Cloud Hobby analytics is configured for the public Sites deployment. It us
 - ZIP preflight and timeout reduce denial-of-service exposure but browser memory is not a hard sandbox budget. A malicious parser input may crash a tab. No claim of comprehensive hostile-file resilience is made.
 - All-change inspection is paginated; side-by-side tables show only the first eight rows. Preview counts refer to selected repairs, while issue counts may refer to rows, cells or columns as labelled.
 - No durable audit trail, session persistence or server-side recovery. Reset or close the tab to clear data.
-- The Sites deployment is public. Usage analytics is configured for the current hostname; update analytics-config.json if it changes.
+- The GitHub Pages workflow configures the deployment origin and repository path at build time. The previous Sites preview is preserved.
 
 ## Short roadmap
 
