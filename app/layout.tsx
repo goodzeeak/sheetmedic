@@ -3,7 +3,7 @@ import './globals.css';
 import { Analytics } from './analytics';
 import {siteUrl} from '../lib/site';
 const origin=siteUrl;
-export const metadata:Metadata={metadataBase:new URL(origin),title:'SheetMedic — Clean CSV & Excel files privately',description:'Diagnose messy spreadsheets, remove duplicate CSV rows and preview safe repairs. CSV and XLSX processing stays in your browser. Free, no signup.',alternates:{canonical:'/'},openGraph:{title:'SheetMedic · A clean sheet starts here.',description:'Diagnose, clean and repair messy spreadsheets in seconds.',type:'website',url:'/'},robots:{index:true,follow:true}};
+export const metadata:Metadata={metadataBase:new URL(origin),verification:{google:'0VQ9ySiq5FnqEQskgGBPpgn-wjF8ybNRaFvYrwl3krI'},title:'SheetMedic — Clean CSV & Excel files privately',description:'Diagnose messy spreadsheets, remove duplicate CSV rows and preview safe repairs. CSV and XLSX processing stays in your browser. Free, no signup.',alternates:{canonical:'/'},openGraph:{title:'SheetMedic · A clean sheet starts here.',description:'Diagnose, clean and repair messy spreadsheets in seconds.',type:'website',url:'/'},robots:{index:true,follow:true}};
 export default function RootLayout({children}:{children:React.ReactNode}) {
   return <html lang="en"><body>{children}<Analytics/><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify({'@context':'https://schema.org','@type':'SoftwareApplication',name:'SheetMedic',applicationCategory:'UtilitiesApplication',operatingSystem:'Web browser',offers:{'@type':'Offer',price:'0',priceCurrency:'USD'}})}}/></body></html>;
 }
