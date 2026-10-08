@@ -38,8 +38,9 @@ function onReady(e:MessageEvent){
 export function startAnalytics(value:AnalyticsConfig){
   if(frame||!validConfig(value)||privacyOptOut(navigator))return;
   config=value;frame=document.createElement('iframe');frame.title='Optional usage analytics';frame.hidden=true;
-  // Opaque-origin sandbox: Google's tag cannot read the app DOM, uploaded files or cookies.
-  frame.setAttribute('sandbox','allow-scripts');frame.referrerPolicy='no-referrer';frame.src=assetPath('/ga-bridge.html');
+  // A dedicated empty frame keeps automatic measurement away from spreadsheet controls.
+  // GA4 requires a normal origin; this is data separation, not a security isolation boundary.
+  frame.setAttribute('sandbox','allow-scripts allow-same-origin');frame.referrerPolicy='no-referrer';frame.src=assetPath('/ga-bridge.html');
   window.addEventListener('message',onReady);document.body.appendChild(frame);
 }
 export function stopAnalytics(){frame?.remove();frame=null;config=null;ready=false;queue=[];if(typeof window!=='undefined')window.removeEventListener('message',onReady);}

@@ -1,4 +1,4 @@
-// Runs in an opaque-origin iframe. Never grant this iframe allow-same-origin.
+// Runs only after consent, in a dedicated frame with no spreadsheet UI or file controls.
 (() => {
   const allowed = new Set(['page_view','analysis_success','repairs_applied','export_success','processing_attempt','processing_failure']);
   let config;
@@ -15,7 +15,7 @@
       gtag('consent','default',{analytics_storage:'granted',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
       gtag('js',new Date());
       gtag('config',config.measurementId,{send_page_view:false,allow_google_signals:false,allow_ad_personalization_signals:false,
-        client_id:crypto.randomUUID(),cookie_domain:'none',cookie_expires:0,cookie_update:false,
+        client_id:crypto.randomUUID(),cookie_domain:'none',cookie_path:new URL(config.siteUrl).pathname||'/',cookie_prefix:'sheetmedic',cookie_expires:0,cookie_update:false,
         page_location:config.siteUrl+'/',page_title:'SheetMedic',page_referrer:''});
       const script=document.createElement('script');script.async=true;script.referrerPolicy='no-referrer';
       script.src='https://www.googletagmanager.com/gtag/js?id='+config.measurementId;document.head.appendChild(script);

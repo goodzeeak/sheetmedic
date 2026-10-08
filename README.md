@@ -20,7 +20,7 @@ Open http://localhost:3000. No API keys, database or account required. Copy `.en
 - `lib/files.ts`: Papa Parse CSV, official SheetJS CE 0.20.3 XLSX, fflate ZIP preflight.
 - `lib/worker.ts`: parsing, analysis, repair and export off the UI thread; 20-second timeout terminates the worker.
 - `app/page.tsx`: upload, report, repair selection, preview, all-change pagination and downloads.
-- No spreadsheet network requests, API routes, persistent storage, remote fonts or third-party assets. Optional consented usage events go to GA4 in an isolated frame; see GITHUB-PAGES.md.
+- No spreadsheet network requests, API routes, persistent storage, remote fonts or third-party assets. Optional consented usage events go to GA4 in a dedicated empty frame; see GITHUB-PAGES.md.
 
 ## Package selection
 

@@ -8,7 +8,7 @@ test('GA4 requires opt-in, isolates spreadsheet data, supports withdrawal',async
  await setup(page);await page.goto('./?private=secret@example.com#private');
  await expect(page.getByRole('button',{name:'Allow analytics'})).toBeVisible();expect(page.frames()).toHaveLength(1);
  await page.getByRole('button',{name:'Allow analytics'}).click();
- const iframe=page.locator('iframe[title="Optional usage analytics"]');await expect(iframe).toHaveAttribute('sandbox','allow-scripts');
+ const iframe=page.locator('iframe[title="Optional usage analytics"]');await expect(iframe).toHaveAttribute('sandbox','allow-scripts allow-same-origin');
  const frame=await (await iframe.elementHandle())!.contentFrame();
  await expect.poll(()=>frame!.evaluate(()=>((window as unknown as {dataLayer:unknown[]}).dataLayer??[]).length)).toBeGreaterThan(3);
  await page.getByLabel('Choose spreadsheet').setInputFiles({name:'private-payroll.csv',mimeType:'text/csv',buffer:Buffer.from('Private column\n secret@example.com ')});
@@ -16,7 +16,8 @@ test('GA4 requires opt-in, isolates spreadsheet data, supports withdrawal',async
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download CSV',exact:true}).click();await download;
  await expect.poll(()=>frame!.evaluate(()=>JSON.stringify((window as unknown as {dataLayer:unknown[]}).dataLayer))).toContain('export_success');
  const serialized=await frame!.evaluate(()=>JSON.stringify((window as unknown as {dataLayer:unknown[]}).dataLayer));for(const value of ['private-payroll','secret@example.com','Private column','?private','#private'])expect(serialized).not.toContain(value);
- expect(await frame!.evaluate(()=>{try{void parent.document.body;return false;}catch{return true;}})).toBe(true);
+ expect(await frame!.locator('input,table,a[download]').count()).toBe(0);
+ expect(await page.evaluate(()=>typeof (window as unknown as {dataLayer:unknown}).dataLayer)).toBe('undefined');
  await page.getByRole('button',{name:'Analytics preferences'}).click();await page.getByRole('button',{name:'No thanks'}).click();await expect(iframe).toHaveCount(0);
 });
 test('privacy signals suppress analytics',async({page})=>{await setup(page);await page.addInitScript(()=>Object.defineProperty(navigator,'globalPrivacyControl',{value:true}));await page.goto('./');await page.getByRole('button',{name:'Try a sample spreadsheet'}).click();await expect(page.getByRole('heading',{name:'A little clarity for your data.'})).toBeVisible();await expect(page.locator('iframe')).toHaveCount(0);await expect(page.getByRole('button',{name:'Allow analytics'})).toHaveCount(0);});
